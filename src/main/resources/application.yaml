@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: mediflow-platform
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hsp
+    username: postgres
+    password: Password@123
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+    # Ensures Hibernate creates/updates the schema BEFORE data.sql runs
+    defer-datasource-initialization: true
+
+  sql:
+    init:
+      # Run data.sql on every startup (uses ON CONFLICT DO NOTHING for idempotency)
+      mode: always
+
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
+
+# ─── JWT Configuration ────────────────────────────────────────────────────────
+app:
+  jwt:
+    # Base64-encoded HMAC-SHA256 secret key (min 256 bits).
+    # IMPORTANT: Replace this with a securely generated random key in production.
+    # Generate with: openssl rand -base64 64
+    secret: bWVkaWZsb3ctcGxhdGZvcm0tc2VjcmV0LWp3dC1zaWduaW5nLWtleS0yMDI2LXByb2R1Y3Rpb24=
+
+    # Access token lifetime: 1 hour (3 600 000 ms)
+    access-token-expiration: 3600000
+
+    # Refresh token lifetime: 7 days (604 800 000 ms)
+    refresh-token-expiration: 604800000
+
+# ─── Logging ──────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.mediflow.platform.auth: DEBUG
+    org.springframework.security: INFO
