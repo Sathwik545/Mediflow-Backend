@@ -137,8 +137,9 @@ public class DoctorServiceImpl implements DoctorService {
     public Page<DoctorResponseDTO> getAllDoctors(int page, int size, DoctorStatus status) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        DoctorStatus effectiveStatus = (status != null) ? status : DoctorStatus.ACTIVE;
-        Page<Doctor> doctors = doctorRepository.findAllByStatus(effectiveStatus, pageable);
+        Page<Doctor> doctors = (status != null)
+                ? doctorRepository.findAllByStatus(status, pageable)
+                : doctorRepository.findAll(pageable);
 
         return doctors.map(DoctorMapper::toResponseDTO);
     }
@@ -187,7 +188,7 @@ public class DoctorServiceImpl implements DoctorService {
                 .existsByDoctor_DoctorCodeAndAppointmentDateAfterAndAppointmentStatusIn(
                         doctorCode,
                         LocalDate.now(),
-                        List.of(AppointmentStatus.SCHEDULED, AppointmentStatus.IN_PROGRESS)
+                        List.of(AppointmentStatus.PAYMENT_PENDING, AppointmentStatus.CONFIRMED, AppointmentStatus.IN_PROGRESS)
                 );
 
         if (hasFutureAppointments) {

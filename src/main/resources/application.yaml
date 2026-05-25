@@ -3,7 +3,7 @@ spring:
     name: mediflow-platform
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/hsp
+    url: jdbc:postgresql://localhost:5432/hspdb
     username: postgres
     password: Password@123
     driver-class-name: org.postgresql.Driver
@@ -28,9 +28,20 @@ spring:
     deserialization:
       fail-on-unknown-properties: false
 
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 11MB
+
 # ─── JWT Configuration ────────────────────────────────────────────────────────
 app:
+  upload:
+    # Directory for lab report file attachments (relative to app working directory)
+    # In production, set to an absolute path outside the application directory
+    directory: uploads/reports
   jwt:
+
     # Base64-encoded HMAC-SHA256 secret key (min 256 bits).
     # IMPORTANT: Replace this with a securely generated random key in production.
     # Generate with: openssl rand -base64 64

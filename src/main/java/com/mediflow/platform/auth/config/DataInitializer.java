@@ -6,6 +6,8 @@ import com.mediflow.platform.auth.enums.RoleName;
 import com.mediflow.platform.auth.enums.UserStatus;
 import com.mediflow.platform.auth.repository.RoleRepository;
 import com.mediflow.platform.auth.repository.UserRepository;
+import com.mediflow.platform.settings.entity.HospitalSettings;
+import com.mediflow.platform.settings.repository.HospitalSettingsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -35,9 +37,10 @@ import java.util.Set;
 @Slf4j
 public class DataInitializer implements ApplicationRunner {
 
-    private final UserRepository    userRepository;
-    private final RoleRepository    roleRepository;
-    private final PasswordEncoder   passwordEncoder;
+    private final UserRepository               userRepository;
+    private final RoleRepository               roleRepository;
+    private final PasswordEncoder              passwordEncoder;
+    private final HospitalSettingsRepository   hospitalSettingsRepository;
 
     // Default admin credentials — override via environment variables in production:
     //   ADMIN_USERNAME, ADMIN_PASSWORD, ADMIN_EMAIL
@@ -51,6 +54,7 @@ public class DataInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         log.info("[DataInitializer] Running bootstrap checks...");
         seedAdminUser();
+        seedHospitalSettings();
         log.info("[DataInitializer] Bootstrap complete.");
     }
 
@@ -86,5 +90,29 @@ public class DataInitializer implements ApplicationRunner {
         log.info("[DataInitializer] Default admin user created successfully.");
         log.info("[DataInitializer] Admin username: '{}'  |  email: '{}'", DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_EMAIL);
         log.warn("[DataInitializer] SECURITY REMINDER: Change the default admin password immediately in production!");
+    }
+
+    /**
+     * Seeds the single hospital settings row if it does not already exist.
+     * This ensures that GET /api/v1/settings/hospital always returns a valid
+     * record and that future invoice generation has a non-null configuration source.
+     *
+     * Idempotent: skipped on every startup after the first successful seed.
+     */
+    private void seedHospitalSettings() {
+        if (hospitalSettingsRepository.count() > 0) {
+            log.info("[DataInitializer] Hospital settings already exist — skipping seed.");
+            return;
+        }
+
+        HospitalSettings defaultSettings = HospitalSettings.builder()
+                .hospitalCode("MEDIFLOW")
+                .hospitalName("MediFlow Hospital")
+                .currencyCode("INR")
+                .timezone("Asia/Kolkata")
+                .build();
+
+        hospitalSettingsRepository.save(defaultSettings);
+        log.info("[DataInitializer] Default hospital settings seeded — hospitalCode=MEDIFLOW, hospitalName=MediFlow Hospital.");
     }
 }

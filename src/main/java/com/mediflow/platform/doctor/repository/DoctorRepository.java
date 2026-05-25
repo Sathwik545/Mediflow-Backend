@@ -18,6 +18,9 @@ public interface DoctorRepository extends JpaRepository<Doctor, Long> {
 
     Optional<Doctor> findByEmail(String email);
 
+    /** Used by ConsultationServiceImpl to resolve the currently logged-in doctor from JWT email. */
+    Optional<Doctor> findByUser_Email(String email);
+
     boolean existsByEmail(String email);
 
     boolean existsByDoctorCode(String doctorCode);

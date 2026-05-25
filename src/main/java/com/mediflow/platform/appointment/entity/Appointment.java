@@ -76,7 +76,7 @@ public class Appointment extends BaseAuditEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "appointment_status", nullable = false, length = 20)
     @Builder.Default
-    private AppointmentStatus appointmentStatus = AppointmentStatus.SCHEDULED;
+    private AppointmentStatus appointmentStatus = AppointmentStatus.PAYMENT_PENDING;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "booked_by", nullable = false, length = 20)

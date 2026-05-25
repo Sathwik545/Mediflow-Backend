@@ -34,7 +34,7 @@ public final class AppointmentMapper {
                 .startTime(dto.getStartTime())
                 .endTime(dto.getEndTime())
                 .consultationType(dto.getConsultationType())
-                .appointmentStatus(AppointmentStatus.SCHEDULED)
+                .appointmentStatus(AppointmentStatus.PAYMENT_PENDING)
                 .bookedBy(dto.getBookedBy())
                 .reasonForVisit(dto.getReasonForVisit() != null ? dto.getReasonForVisit().trim() : null)
                 .notes(dto.getNotes() != null ? dto.getNotes().trim() : null)

@@ -11,6 +11,7 @@ import com.mediflow.platform.appointment.exception.AppointmentNotFoundException;
 import com.mediflow.platform.appointment.mapper.AppointmentMapper;
 import com.mediflow.platform.appointment.repository.AppointmentRepository;
 import com.mediflow.platform.appointment.service.AppointmentService;
+import com.mediflow.platform.billing.service.BillService;
 import com.mediflow.platform.common.exception.BusinessRuleViolationException;
 import com.mediflow.platform.doctor.entity.Doctor;
 import com.mediflow.platform.doctor.enums.DoctorStatus;
@@ -48,6 +49,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
     private final DoctorRepository doctorRepository;
+    private final BillService billService;
 
     /**
      * Books a new appointment following the 9-step validation and persistence flow:
@@ -99,6 +101,8 @@ public class AppointmentServiceImpl implements AppointmentService {
             );
         }
 
+        validateAppointmentNotInPast(request.getAppointmentDate(), request.getStartTime());
+
         // Step 6: Overlap detection
         List<Appointment> overlapping = appointmentRepository.findOverlappingAppointments(
                 doctor.getId(),
@@ -125,6 +129,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         String appointmentCode = generateAppointmentCode();
         Appointment appointment = AppointmentMapper.toEntity(request, patient, doctor, appointmentCode);
         Appointment saved = appointmentRepository.save(appointment);
+
+        // Automatically generate a consultation bill in the same transaction.
+        // If bill creation fails, the whole transaction rolls back — no orphan appointments.
+        billService.generateBillForAppointment(saved);
 
         log.info("Appointment booked | code={}, patient={}, doctor={}, date={}",
                 saved.getAppointmentCode(), request.getPatientCode(),
@@ -175,7 +183,11 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     /**
-     * Cancels an appointment. Only appointments in SCHEDULED status can be cancelled.
+     * Cancels an appointment.
+     *
+     * PAYMENT_PENDING → CANCELLED: bill is also cancelled (payment never made).
+     * CONFIRMED → CANCELLED: appointment cancelled but bill remains PAID — refund is a future workflow.
+     * IN_PROGRESS, COMPLETED, NO_SHOW: rejected with a 422 business rule violation.
      */
     @Override
     @Transactional
@@ -183,17 +195,51 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = appointmentRepository.findByAppointmentCode(appointmentCode)
                 .orElseThrow(() -> new AppointmentNotFoundException(appointmentCode));
 
-        if (appointment.getAppointmentStatus() != AppointmentStatus.SCHEDULED) {
+        AppointmentStatus currentStatus = appointment.getAppointmentStatus();
+
+        if (currentStatus != AppointmentStatus.PAYMENT_PENDING
+                && currentStatus != AppointmentStatus.CONFIRMED) {
             throw new BusinessRuleViolationException(
-                "Only SCHEDULED appointments can be cancelled. Current status: " +
-                appointment.getAppointmentStatus()
+                "Only PAYMENT_PENDING or CONFIRMED appointments can be cancelled. Current status: " +
+                currentStatus
             );
         }
 
         appointment.setAppointmentStatus(AppointmentStatus.CANCELLED);
         Appointment saved = appointmentRepository.save(appointment);
 
-        log.info("Appointment cancelled | code={}", appointmentCode);
+        // Cancel the bill only if payment was not yet made.
+        // If CONFIRMED (already paid), the bill remains PAID — a future refund workflow will handle that.
+        if (currentStatus == AppointmentStatus.PAYMENT_PENDING) {
+            billService.cancelBillForAppointment(appointmentCode);
+        }
+
+        log.info("Appointment cancelled | code={}, previousStatus={}", appointmentCode, currentStatus);
+        return AppointmentMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * Starts a consultation. Only CONFIRMED appointments (payment received) can move to IN_PROGRESS.
+     * Rejects PAYMENT_PENDING, CANCELLED, COMPLETED, and NO_SHOW with a clear business rule message.
+     */
+    @Override
+    @Transactional
+    public AppointmentResponseDTO startConsultation(String appointmentCode) {
+        Appointment appointment = appointmentRepository.findByAppointmentCode(appointmentCode)
+                .orElseThrow(() -> new AppointmentNotFoundException(appointmentCode));
+
+        if (appointment.getAppointmentStatus() != AppointmentStatus.CONFIRMED) {
+            throw new BusinessRuleViolationException(
+                "Only CONFIRMED appointments can be started. Current status: " +
+                appointment.getAppointmentStatus() +
+                ". Ensure payment is completed before starting the consultation."
+            );
+        }
+
+        appointment.setAppointmentStatus(AppointmentStatus.IN_PROGRESS);
+        Appointment saved = appointmentRepository.save(appointment);
+
+        log.info("Consultation started | code={}", appointmentCode);
         return AppointmentMapper.toResponseDTO(saved);
     }
 
@@ -249,11 +295,19 @@ public class AppointmentServiceImpl implements AppointmentService {
         LocalTime dayEnd  = LocalTime.of(17, 30);
         Duration  step    = Duration.ofMinutes(30);
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("HH:mm");
+        // For today, capture the current time once so all comparisons use the same instant.
+        LocalTime now = LocalDate.now().isEqual(date) ? LocalTime.now() : null;
 
         while (!cursor.plus(step).isAfter(dayEnd)) {
             LocalTime slotEnd = cursor.plus(step);
             final LocalTime s = cursor;
             final LocalTime e = slotEnd;
+
+            // Skip slots that have already started or passed for today's date.
+            if (now != null && !s.isAfter(now)) {
+                cursor = slotEnd;
+                continue;
+            }
 
             boolean isTaken = booked.stream()
                     .anyMatch(a -> a.getStartTime().isBefore(e) && a.getEndTime().isAfter(s));
@@ -289,6 +343,17 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (isAdmin)   return BookedBy.ADMIN;
         if (isPatient) return BookedBy.PATIENT;
         return BookedBy.SYSTEM;
+    }
+
+    // ── Past Slot Guard ──────────────────────────────────────────────────────
+
+    private void validateAppointmentNotInPast(LocalDate appointmentDate, LocalTime startTime) {
+        if (appointmentDate.isEqual(LocalDate.now()) && !startTime.isAfter(LocalTime.now())) {
+            throw new BusinessRuleViolationException(
+                "Cannot book appointment for a past time slot. " +
+                "Please select a future time slot for today's date."
+            );
+        }
     }
 
     // ── Appointment Code Generation ─────────────────────────────────────────

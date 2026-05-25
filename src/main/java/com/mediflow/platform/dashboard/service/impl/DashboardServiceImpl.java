@@ -25,7 +25,7 @@ public class DashboardServiceImpl implements DashboardService {
     public DashboardStatsDTO getStats() {
         long totalPatients     = patientRepository.count();
         long activeDoctors     = doctorRepository.countByStatus(DoctorStatus.ACTIVE);
-        long todayAppointments = appointmentRepository.countByAppointmentDate(LocalDate.now());
+        long todayAppointments = appointmentRepository.countActiveByAppointmentDate(LocalDate.now());
 
         return DashboardStatsDTO.builder()
                 .totalPatients(totalPatients)

@@ -37,4 +37,10 @@ public class AuthResponseDTO {
 
     private List<String> roles;
     private String username;
+
+    /** Populated when the authenticated user is a DOCTOR — their doctorCode. Null for ADMIN/PATIENT. */
+    private String doctorCode;
+
+    /** Populated when the authenticated user is a PATIENT — their patientCode. Null for ADMIN/DOCTOR. */
+    private String patientCode;
 }

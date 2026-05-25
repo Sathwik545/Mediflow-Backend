@@ -14,6 +14,8 @@ import com.mediflow.platform.auth.jwt.JwtUtil;
 import com.mediflow.platform.auth.repository.RefreshTokenRepository;
 import com.mediflow.platform.auth.repository.UserRepository;
 import com.mediflow.platform.auth.service.AuthService;
+import com.mediflow.platform.doctor.repository.DoctorRepository;
+import com.mediflow.platform.patient.repository.PatientRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,6 +58,8 @@ public class AuthServiceImpl implements AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtUtil               jwtUtil;
     private final PasswordEncoder       passwordEncoder;
+    private final DoctorRepository      doctorRepository;
+    private final PatientRepository     patientRepository;
 
     @Value("${app.jwt.refresh-token-expiration}")
     private long refreshTokenExpirationMs;
@@ -100,14 +104,7 @@ public class AuthServiceImpl implements AuthService {
 
         log.info("[Auth] Login successful — username='{}' roles={}", user.getUsername(), roles);
 
-        return AuthResponseDTO.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .tokenType("Bearer")
-                .expiresIn(jwtUtil.getAccessTokenExpirationSeconds())
-                .roles(roles)
-                .username(user.getUsername())
-                .build();
+        return buildAuthResponse(user, roles, accessToken, refreshToken);
     }
 
     // ─── Refresh Token ────────────────────────────────────────────────────────
@@ -157,14 +154,7 @@ public class AuthServiceImpl implements AuthService {
 
         log.info("[Auth] Token refreshed — username='{}' newRefreshToken issued", user.getUsername());
 
-        return AuthResponseDTO.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .tokenType("Bearer")
-                .expiresIn(jwtUtil.getAccessTokenExpirationSeconds())
-                .roles(roles)
-                .username(user.getUsername())
-                .build();
+        return buildAuthResponse(user, roles, newAccessToken, newRefreshToken);
     }
 
     // ─── Logout ───────────────────────────────────────────────────────────────
@@ -187,6 +177,33 @@ public class AuthServiceImpl implements AuthService {
     }
 
     // ─── Internal helpers ─────────────────────────────────────────────────────
+
+    /**
+     * Assembles the final AuthResponseDTO, resolving the optional doctorCode/patientCode
+     * by querying the doctor and patient repositories for a record linked to this user.
+     * Exactly one of the two will be non-null (or both null for ADMIN users).
+     */
+    private AuthResponseDTO buildAuthResponse(User user, List<String> roles,
+                                              String accessToken, String refreshToken) {
+        String doctorCode = doctorRepository.findByUser_Email(user.getEmail())
+                .map(d -> d.getDoctorCode())
+                .orElse(null);
+
+        String patientCode = patientRepository.findByUser_Email(user.getEmail())
+                .map(p -> p.getPatientCode())
+                .orElse(null);
+
+        return AuthResponseDTO.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(jwtUtil.getAccessTokenExpirationSeconds())
+                .roles(roles)
+                .username(user.getUsername())
+                .doctorCode(doctorCode)
+                .patientCode(patientCode)
+                .build();
+    }
 
     /** Builds "ROLE_<NAME>" strings from the user's role set — used in JWT claims and DTO. */
     private List<String> buildRoleList(User user) {

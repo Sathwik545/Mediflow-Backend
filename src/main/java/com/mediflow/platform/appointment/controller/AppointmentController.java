@@ -59,7 +59,7 @@ public class AppointmentController {
     @Operation(
         summary = "Get all appointments",
         description = "Returns a paginated list of all appointments sorted by date (newest first). " +
-                      "Optionally filter by status (SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW)."
+                      "Optionally filter by status (PAYMENT_PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW)."
     )
     @GetMapping
     public ResponseEntity<ApiResponse<Page<AppointmentResponseDTO>>> getAllAppointments(
@@ -117,8 +117,24 @@ public class AppointmentController {
     }
 
     @Operation(
+        summary = "Start a consultation",
+        description = "Transitions a CONFIRMED appointment (payment received) to IN_PROGRESS. " +
+                      "Rejects PAYMENT_PENDING, CANCELLED, COMPLETED, and NO_SHOW appointments."
+    )
+    @PutMapping("/{appointmentCode}/start")
+    public ResponseEntity<ApiResponse<AppointmentResponseDTO>> startConsultation(
+            @PathVariable String appointmentCode) {
+
+        AppointmentResponseDTO response = appointmentService.startConsultation(appointmentCode);
+        return ResponseEntity.ok(ApiResponse.success("Consultation started successfully", response));
+    }
+
+    @Operation(
         summary = "Cancel an appointment",
-        description = "Cancels a SCHEDULED appointment. Appointments in any other status cannot be cancelled."
+        description = "Cancels a PAYMENT_PENDING or CONFIRMED appointment. " +
+                      "If PAYMENT_PENDING: linked bill is also cancelled. " +
+                      "If CONFIRMED (already paid): bill remains PAID — refund handled separately. " +
+                      "IN_PROGRESS, COMPLETED, and NO_SHOW appointments cannot be cancelled."
     )
     @PutMapping("/{appointmentCode}/cancel")
     public ResponseEntity<ApiResponse<AppointmentResponseDTO>> cancelAppointment(

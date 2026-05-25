@@ -128,8 +128,9 @@ public class PatientServiceImpl implements PatientService {
     public Page<PatientResponseDTO> getAllPatients(int page, int size, PatientStatus status) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        PatientStatus effectiveStatus = (status != null) ? status : PatientStatus.ACTIVE;
-        Page<Patient> patients = patientRepository.findAllByStatus(effectiveStatus, pageable);
+        Page<Patient> patients = (status != null)
+                ? patientRepository.findAllByStatus(status, pageable)
+                : patientRepository.findAll(pageable);
 
         return patients.map(PatientMapper::toResponseDTO);
     }
@@ -162,7 +163,7 @@ public class PatientServiceImpl implements PatientService {
                 .existsByPatient_PatientCodeAndAppointmentDateAfterAndAppointmentStatusIn(
                         patientCode,
                         LocalDate.now(),
-                        List.of(AppointmentStatus.SCHEDULED, AppointmentStatus.IN_PROGRESS)
+                        List.of(AppointmentStatus.PAYMENT_PENDING, AppointmentStatus.CONFIRMED, AppointmentStatus.IN_PROGRESS)
                 );
 
         if (hasFutureAppointments) {

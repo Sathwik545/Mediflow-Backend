@@ -122,8 +122,28 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/doctors/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/patients/**").hasRole("ADMIN")
 
+                // ADMIN-only: hospital settings (GET + PUT both restricted — PATIENT/DOCTOR must receive 403)
+                .requestMatchers(HttpMethod.GET, "/api/v1/settings/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/v1/settings/**").hasRole("ADMIN")
+
+                // ADMIN + PATIENT only: invoice PDF preview and download
+                // DOCTOR is explicitly excluded — invoices are patient-facing financial documents
+                .requestMatchers(HttpMethod.GET, "/api/v1/invoices/**").hasAnyRole("ADMIN", "PATIENT")
+
                 // ADMIN-only: book appointments on behalf of patients
                 .requestMatchers(HttpMethod.POST, "/api/v1/appointments").hasRole("ADMIN")
+
+                // ADMIN + DOCTOR: create lab orders and manage lab report results
+                // PATIENT is explicitly excluded from write operations
+                .requestMatchers(HttpMethod.POST, "/api/v1/lab-orders").hasAnyRole("ADMIN", "DOCTOR")
+                .requestMatchers(HttpMethod.PUT,  "/api/v1/lab-orders/**").hasAnyRole("ADMIN", "DOCTOR")
+                .requestMatchers(HttpMethod.POST, "/api/v1/lab-reports").hasAnyRole("ADMIN", "DOCTOR")
+                .requestMatchers(HttpMethod.PUT,  "/api/v1/lab-reports/**").hasAnyRole("ADMIN", "DOCTOR")
+
+                // ADMIN + DOCTOR: start a consultation (POST) and modify draft/complete (PUT)
+                // PATIENT is explicitly excluded — clinical records are created by doctors only
+                .requestMatchers(HttpMethod.POST, "/api/v1/consultations/**").hasAnyRole("ADMIN", "DOCTOR")
+                .requestMatchers(HttpMethod.PUT,  "/api/v1/consultations/**").hasAnyRole("ADMIN", "DOCTOR")
 
                 // ADMIN + DOCTOR: complete or cancel appointments
                 .requestMatchers(HttpMethod.PUT, "/api/v1/appointments/**").hasAnyRole("ADMIN", "DOCTOR")

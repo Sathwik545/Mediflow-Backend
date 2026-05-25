@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
@@ -47,6 +48,20 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
 
     long countByAppointmentDate(LocalDate date);
 
+    // Dashboard: count only operationally meaningful appointments on a given date.
+    // Includes: CONFIRMED (paid), IN_PROGRESS (consultation started), COMPLETED.
+    // Excludes: PAYMENT_PENDING (unconfirmed), CANCELLED, NO_SHOW.
+    @Query("""
+        SELECT COUNT(a) FROM Appointment a
+        WHERE a.appointmentDate = :date
+          AND a.appointmentStatus IN (
+              com.mediflow.platform.appointment.enums.AppointmentStatus.CONFIRMED,
+              com.mediflow.platform.appointment.enums.AppointmentStatus.IN_PROGRESS,
+              com.mediflow.platform.appointment.enums.AppointmentStatus.COMPLETED
+          )
+        """)
+    long countActiveByAppointmentDate(@Param("date") LocalDate date);
+
     Page<Appointment> findByAppointmentStatus(AppointmentStatus status, Pageable pageable);
 
     Page<Appointment> findByPatient_PatientCode(String patientCode, Pageable pageable);
@@ -74,4 +89,9 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
 
     boolean existsByDoctor_DoctorCodeAndAppointmentDateAfterAndAppointmentStatusIn(
             String doctorCode, LocalDate date, List<AppointmentStatus> statuses);
+
+    // Used by PaymentTimeoutScheduler to find appointments whose payment window has expired.
+    // createdAt is inherited from BaseAuditEntity — Spring Data JPA resolves it via @MappedSuperclass.
+    List<Appointment> findByAppointmentStatusAndCreatedAtBefore(
+            AppointmentStatus status, LocalDateTime expiryThreshold);
 }

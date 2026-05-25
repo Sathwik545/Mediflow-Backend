@@ -23,6 +23,12 @@ public interface AppointmentService {
 
     AppointmentResponseDTO cancelAppointment(String appointmentCode);
 
+    /**
+     * Transitions a CONFIRMED appointment to IN_PROGRESS.
+     * Payment must be completed (CONFIRMED) before a consultation can begin.
+     */
+    AppointmentResponseDTO startConsultation(String appointmentCode);
+
     AppointmentResponseDTO completeAppointment(String appointmentCode);
 
     /**
